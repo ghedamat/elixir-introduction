@@ -20,6 +20,9 @@ class: center, middle
 ## Developer @ [Precision Nutrition](https://precisionnutrition.com)
 ## Co-Organizer of ElixirTo ([@torontoelixir](https://twitter.com/torontoelixir))
 
+## Lots of Ruby & JS by day
+## Elixir whenever I can
+
 ---
 # What is Elixir
 
@@ -38,9 +41,9 @@ class: center, middle
 
 # Functional
 
-# Immutability
+# Immutable
 
-# Concurrency
+# Concurrent
 
 # Metaprogramming (macros)
 
@@ -66,8 +69,8 @@ class: center, middle
 # Vertical Scaling has a limit
 
 ## increasing number of cores
-## Fork model doesn't work that well
-## Enables using all resources
+## fork model doesn't work that well
+## need to start using all resources
 
 # It's FAST and has great ergonomics
 
@@ -375,16 +378,419 @@ class: center, middle
 
 class: center, middle
 
-# Announcements
+# Warning
 
-## We have a new newsletter
+## Lots of hand waving ahead
 
-## http://torontoemberjs.com
+---
 
-## Next month, final meetup of the year
+# Processes!
 
-## Demo December, Pharmacy Bar, Parkdale
+## All elixir code runs inside processes
 
-## Please reach out with your demos!
+## Processes are isolated
 
-## NO MEETUP IN JANUARY
+## They can **only** communicate via **message passing**
+
+## They can be **supervised**
+
+## Elixir processes are not system processes
+
+## You can have hundreds of thousands of them!
+
+---
+class: center, middle
+
+<img src="https://i.imgflip.com/1nykrj.jpg">
+
+---
+
+# Basic Process(ing)
+
+```elixir
+iex> pid = spawn fn -> 5 + 4 end
+#PID<0.40.0>
+iex> Process.alive?(pid)
+false
+
+# sending/receive messages
+iex> send self(), {:hello, "world"}
+{:hello, "world"}
+
+iex> receive do
+...>   {:hello, msg} -> msg
+...>   {:world, msg} -> "won't match"
+...> end
+"world"
+
+```
+
+---
+
+# Links
+
+## Spawn
+
+```elixir
+# Normal spawn
+iex> pid = spawn fn -> raise "broken" end
+#PID<0.58.0>
+
+[error] Process #PID<0.58.00> raised an exception
+** (RuntimeError) oops
+    :erlang.apply/2
+
+```
+
+## Spawn link
+```elixir
+iex> spawn_link fn -> raise "oops" end
+#PID<0.41.0>
+
+** (EXIT from #PID<0.41.0>) an exception was raised:
+    ** (RuntimeError) oops
+        :erlang.apply/2
+
+# iex will restart in this case 
+# but in general your process will crash
+```
+
+---
+
+# Tasks
+
+## Simpler primitive with better error reporting
+
+```elixir
+iex> task = Task.async fn -> long_compute() end
+
+iex> do_some_other_work()
+
+iex> Task.await(task, 1000)
+# blocks until complete or timeout
+```
+
+---
+
+class: center, middle
+
+# Wait, how do I hold state??
+
+---
+
+# Holding State
+
+## Few options:
+
+## **Processes**
+
+## ETS (Erlang Term Storage)
+
+## External storage (Disk, DBs, ...)
+
+---
+
+# Storing state in a process
+
+## A process can loop indefinitely
+
+## Each interation of the loop will send/receive messages
+
+## Every loop defines the new state
+
+```elixir
+
+defmodule KV do
+  def start_link do
+    Task.start_link(fn -> loop(%{}) end)
+  end
+
+  defp loop(map) do
+    receive do
+      {:get, key, caller} ->
+        send caller, Map.get(map, key)
+        loop(map)
+      {:put, key, value} ->
+        loop(Map.put(map, key, value))
+    end
+  end
+end
+
+```
+
+---
+
+# Storing state in a process (cont'd)
+
+
+```elixir
+iex> {:ok, pid} = KV.start_link
+{:ok, #PID<0.62.0>}
+
+iex> send pid, {:get, :hello, self()}
+{:get, :hello, #PID<0.41.0>}
+
+iex> flush()
+nil
+:ok
+
+```
+
+---
+
+# Agents
+
+## Another simpler primitive
+
+## A simpler wrapper around state
+
+
+```elixir
+iex> {:ok, agent} = Agent.start_link fn -> [] end
+{:ok, #PID<0.57.0>}
+
+iex> Agent.update(agent, fn list -> ["eggs" | list] end)
+:ok
+
+iex> Agent.get(agent, fn list -> list end)
+["eggs"]
+
+iex> Agent.stop(agent)
+:ok
+
+```
+
+---
+
+# GenServer
+
+## It's a process like any other
+
+## It's a `behaviour`
+
+## Abstracts client/server interaction
+
+## Primitives to get/set state
+
+## Hides the "looping"
+
+## Provides error handling
+
+---
+
+# GenServer (cont'd)
+
+## Public API (client)
+
+### Runs on the caller process
+
+## Private API (server)
+
+### Receives messages in separate process
+
+---
+
+# GenServer example
+
+```elixir
+defmodule KV.Registry do
+
+  use GenServer
+
+  ## Client API
+
+  def start_link do
+    GenServer.start_link(__MODULE__, :ok, [])
+  end
+
+  def lookup(server, name) do
+    GenServer.call(server, {:lookup, name})
+  end
+
+  def create(server, name) do
+    GenServer.cast(server, {:create, name})
+  end
+  
+  ...
+```
+
+---
+
+# GenServer example (cont'd)
+
+```elixir
+  ## Server Callbacks
+
+  def init(:ok) do
+    {:ok, %{}}
+  end
+
+  def handle_call({:lookup, name}, _from, names) do
+    {:reply, Map.fetch(names, name), names}
+  end
+
+  def handle_cast({:create, name}, names) do
+    if Map.has_key?(names, name) do
+      {:noreply, names}
+    else
+      {:ok, bucket} = KV.Bucket.start_link
+      {:noreply, Map.put(names, name, bucket)}
+    end
+  end
+end
+```
+
+---
+
+# Supervisiors
+
+## Handling failure
+
+## "Let it crash"
+
+## Processes that monitor other processes
+
+## Another `behaviour`
+
+## Based on GenServer
+
+
+---
+
+# Supervisor example
+
+```elixir
+defmodule KV.Supervisor do
+  use Supervisor
+
+  def start_link do
+    Supervisor.start_link(__MODULE__, :ok)
+  end
+
+  def init(:ok) do
+    children = [
+      worker(KV.Registry, [KV.Registry])
+    ]
+
+    supervise(children, strategy: :one_for_one)
+  end
+end
+```
+
+---
+
+# Supervision Trees
+
+<img src="images/obs.png" width="100%" height="100%">
+
+---
+
+class: center, middle
+
+# A quick note about Webapps
+
+
+---
+
+class: center, middle
+
+# Phoenix
+
+## A productive web framework that does not compromise speed and maintainability.
+
+---
+
+# Data Flow
+
+## connection
+## |> endpoint
+## |> router
+## |> pipelines
+## |> controller
+## |> model
+## |> view
+
+---
+
+# Controllers
+
+```elixir
+
+defmodule MyApp.PageController do
+  use HelloPhoenix.web, :controller
+
+  def index(conn, _params) do
+    render conn, "index.html"
+  end
+end
+
+```
+
+---
+
+# Models
+
+```elixir
+defmodule MyApp.User do
+  use HelloPhoenix.Web, :model
+
+  schema "users" do
+    field :name, :string
+    field :email, :string
+    field :bio, :string
+    field :number_of_pets, :integer
+
+    timestamps()
+  end
+
+  def changeset(struct, params \\ %{}) do
+    struct
+    |> cast(params, [:name, :email, :bio, :number_of_pets])
+    |> validate_required([:name, :email, :bio, :number_of_pets])
+  end
+end
+```
+
+---
+
+# Channels
+
+```elixir
+defmodule HelloPhoenix.RoomChannel do
+  use Phoenix.Channel
+
+  def join("room:lobby", _message, socket) do
+    {:ok, socket}
+  end
+  def join("room:" <> _private_room_id, _params, _socket) do
+    {:error, %{reason: "unauthorized"}}
+  end
+
+  def handle_in("new_msg", %{"body" => body}, socket) do
+    broadcast! socket, "new_msg", %{body: body}
+    {:noreply, socket}
+  end
+
+  def handle_out("new_msg", payload, socket) do
+    push socket, "new_msg", payload
+    {:noreply, socket}
+  end
+end
+```
+
+---
+
+class: center, middle
+
+# There's a LOT more to discover
+
+## Maybe in another talk :)
+
+---
+
+class: center, middle
+
+# Thanks!!!
+
+## @ghedamat
+
