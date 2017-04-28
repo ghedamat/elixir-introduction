@@ -13,14 +13,14 @@ module.exports = function(deployTarget) {
       accessKeyId: process.env['AWS_ACCESS_KEY'],
       secretAccessKey: process.env['AWS_SECRET_KEY'],
       filePattern: '**/*.{js,css,png,gif,ico,jpg,map,xml,txt,svg,swf,eot,ttf,woff,woff2,md,json}',
-      bucket: 'ember-cli-mirage-intro',
-      region: 'us-west-2'
+      bucket: 'elixir-introduction',
+      region: 'us-east-2'
     };
     ENV['s3-index'] = {
       accessKeyId: process.env['AWS_ACCESS_KEY'],
       secretAccessKey: process.env['AWS_SECRET_KEY'],
-      bucket: 'ember-cli-mirage-intro',
-      region: 'us-west-2',
+      bucket: 'elixir-introduction',
+      region: 'us-east-2',
       allowOverwrite: true
     };
   }

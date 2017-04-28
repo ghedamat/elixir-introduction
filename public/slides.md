@@ -37,6 +37,20 @@ class: center, middle
 <img src="images/elixiris.png" width="100%" height="100%">
 
 ---
+
+# Jose Valim
+
+## Rails core member
+
+## Author of numerous important gems (e.g. devise)
+
+## Felt usabilty of Ruby was great but semantics had problems
+
+## Second BEAM based language he wrote, first one was OO
+
+## Elixir's syntax is very reminiscent of Ruby's
+
+---
 # **Features**
 
 # Functional

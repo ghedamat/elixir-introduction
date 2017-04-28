@@ -10,7 +10,7 @@ module.exports = function(defaults) {
     fingerprint: {
       enabled: isProductionLikeBuild,
       extensions: ['js', 'css', 'gif'],
-      prepend: 'https://d1l7go0hg5u1fq.cloudfront.net/'
+      prepend: ''
     }
   });
 
